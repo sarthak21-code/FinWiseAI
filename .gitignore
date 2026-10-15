@@ -1,0 +1,78 @@
+# Local environment files and secrets. Keep safe templates trackable.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+**/*.env
+
+# Local SQLite databases and sidecar files.
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite
+**/*.sqlite-journal
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite3
+**/*.sqlite3-journal
+**/*.sqlite3-wal
+**/*.sqlite3-shm
+
+# Python environments, caches, bytecode, and coverage output.
+**/.venv/
+**/venv/
+**/env/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.pytest_*/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.tox/
+**/coverage/
+**/htmlcov/
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/*.cover
+
+# Node dependencies and generated frontend output.
+**/node_modules/
+**/.next/
+**/.vercel/
+**/out/
+**/.turbo/
+**/build/
+**/dist/
+
+# Local credentials and private keys.
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+!**/.npmrc.example
+
+# Historical source snapshots and non-source validation output.
+**/*backup*
+**/*.bak
+/frontend-improved-backup/
+/frontend-partner-v2/
+/backend/end_to_end_validation.csv
+
+# Local engineering and acceptance reports should be reviewed individually
+# before publication; keep them available in the worktree for now.
+/reports/
+
+# Logs and temporary files.
+**/logs/
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+
+# Common local OS metadata.
+.DS_Store
+Thumbs.db

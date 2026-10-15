@@ -1,0 +1,158 @@
+﻿@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --background: #070a09;
+  --foreground: #e8efeb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(16, 185, 129, 0.045),
+      transparent 27rem
+    ),
+    var(--background);
+  color: var(--foreground);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  text-decoration: none;
+}
+
+::selection {
+  color: #ecfdf5;
+  background: rgba(16, 185, 129, 0.28);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080c0b;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #080c0b;
+  border-radius: 999px;
+  background: #27342e;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d5548;
+}
+
+.terminal-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: center top;
+}
+
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(255, 255, 255, 0.012) 60%
+    ),
+    rgba(10, 15, 13, 0.88);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.018);
+}
+
+.eyebrow {
+  color: #76877e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: #87948d;
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.nav-link:hover {
+  color: #e8efeb;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.nav-link-active {
+  border-color: rgba(52, 211, 153, 0.12);
+  background: rgba(52, 211, 153, 0.065);
+  color: #bbf7d0;
+}
+
+.nav-link-active:hover {
+  background: rgba(52, 211, 153, 0.09);
+  color: #d1fae5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

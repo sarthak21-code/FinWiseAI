@@ -21,6 +21,14 @@ const compiled = ts.transpileModule(source, {
 const routeModule = new Module(routePath);
 routeModule.filename = routePath;
 routeModule.paths = Module._nodeModulePaths(path.dirname(routePath));
+let testAccessToken = "verified-test-access-token";
+const originalRouteRequire = routeModule.require.bind(routeModule);
+routeModule.require = (id) => {
+  if (id === "@/lib/supabase/server") {
+    return { getAuthenticatedAccessToken: async () => testAccessToken };
+  }
+  return originalRouteRequire(id);
+};
 routeModule._compile(compiled, routePath);
 
 const params = (...segments) => ({
@@ -30,12 +38,14 @@ const params = (...segments) => ({
 async function withProxyFetch(mockFetch, callback) {
   const originalFetch = globalThis.fetch;
   const originalBackendUrl = process.env.BACKEND_URL;
+  const originalAccessToken = testAccessToken;
   globalThis.fetch = mockFetch;
   process.env.BACKEND_URL = "http://backend.test:8000";
   try {
     await callback();
   } finally {
     globalThis.fetch = originalFetch;
+    testAccessToken = originalAccessToken;
     if (originalBackendUrl === undefined) {
       delete process.env.BACKEND_URL;
     } else {
@@ -52,7 +62,7 @@ test("POST profile comparison forwards URL, JSON body, and safe headers", async 
     );
     assert.equal(init.method, "POST");
     assert.equal(init.headers.get("content-type"), "application/json");
-    assert.equal(init.headers.get("authorization"), null);
+    assert.equal(init.headers.get("authorization"), "Bearer verified-test-access-token");
     assert.equal(init.headers.get("cookie"), null);
     assert.deepEqual(
       JSON.parse(Buffer.from(init.body).toString("utf8")),
@@ -73,6 +83,7 @@ test("POST profile comparison forwards URL, JSON body, and safe headers", async 
         method: "POST",
         headers: {
           "content-type": "application/json",
+          origin: "http://frontend.test",
           authorization: "must-not-forward",
           cookie: "must-not-forward",
         },
@@ -104,7 +115,7 @@ test("POST demo seed reaches its backend endpoint without inventing a body", asy
   }, async () => {
     const request = new Request(
       "http://frontend.test/api/backend/api/v1/demo/seed",
-      { method: "POST" },
+      { method: "POST", headers: { origin: "http://frontend.test" } },
     );
     const response = await routeModule.exports.POST(
       request,
@@ -113,6 +124,41 @@ test("POST demo seed reaches its backend endpoint without inventing a body", asy
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { status: "success" });
   });
+});
+
+test("POST proxy rejects a cross-origin request before forwarding", async () => {
+  await withProxyFetch(async () => {
+    assert.fail("cross-origin request must not reach the backend");
+  }, async () => {
+    const request = new Request("http://frontend.test/api/backend/api/v1/profiles", {
+      method: "POST",
+      headers: { origin: "https://attacker.example" },
+      body: "{}",
+    });
+    const response = await routeModule.exports.POST(
+      request,
+      params("api", "v1", "profiles"),
+    );
+    assert.equal(response.status, 403);
+  });
+});
+
+test("API proxy does not forward requests without an authenticated session", async () => {
+  testAccessToken = null;
+  try {
+    await withProxyFetch(async () => {
+      assert.fail("anonymous request must not reach the backend");
+    }, async () => {
+      const request = new Request("http://frontend.test/api/backend/api/v1/profiles");
+      const response = await routeModule.exports.GET(
+        request,
+        params("api", "v1", "profiles"),
+      );
+      assert.equal(response.status, 401);
+    });
+  } finally {
+    testAccessToken = "verified-test-access-token";
+  }
 });
 
 test("GET proxy preserves query parameters and upstream response status/body", async () => {

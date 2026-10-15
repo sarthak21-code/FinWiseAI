@@ -6,10 +6,33 @@ type RouteContext = {
   }>;
 };
 
+import { getAuthenticatedAccessToken } from "@/lib/supabase/server";
+
 async function proxyRequest(
   request: Request,
   context: RouteContext,
 ): Promise<Response> {
+  const origin = request.headers.get("origin");
+  if (request.method !== "GET" && origin !== new URL(request.url).origin) {
+    return NextResponse.json(
+      { detail: "Cross-origin request denied." },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  let accessToken: string | null;
+  try {
+    accessToken = await getAuthenticatedAccessToken();
+  } catch {
+    accessToken = null;
+  }
+  if (!accessToken) {
+    return NextResponse.json(
+      { detail: "Authentication required." },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const { path } = await context.params;
 
   const backendBase = (
@@ -24,9 +47,10 @@ async function proxyRequest(
     const targetUrl = new URL(`${backendBase}/${encodedPath}`);
     targetUrl.search = new URL(request.url).search;
 
-    // Forward only the application headers this JSON API needs. In particular,
-    // do not pass cookies, authorization, or hop-by-hop headers to the backend.
+    // Forward only the verified session bearer token and JSON headers. Never pass
+    // browser cookies or arbitrary client-provided identity/hop-by-hop headers.
     const headers = new Headers({ Accept: "application/json" });
+    headers.set("Authorization", `Bearer ${accessToken}`);
     const contentType = request.headers.get("content-type");
     if (contentType) {
       headers.set("Content-Type", contentType);

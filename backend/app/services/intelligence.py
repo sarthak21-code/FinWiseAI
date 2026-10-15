@@ -138,6 +138,7 @@ async def analyze_symbol(
     symbol: str,
     profile_id: Optional[str] = None,
     db: Optional[Session] = None,
+    owner_id: Optional[str] = None,
 ) -> IntelligenceAnalysis:
     """Combine technical, fundamental, news, and filing evidence concurrently."""
     start_total = time.perf_counter()
@@ -714,6 +715,7 @@ async def analyze_symbol(
             reasoning_trace=[r.model_dump() for r in analysis_res.reasoning_trace],
             personalized_interpretation=analysis_res.personalized_interpretation.model_dump() if analysis_res.personalized_interpretation else None,
             profile_id=profile_id,
+            owner_id=owner_id,
         )
         # Only score complete, real-data analyses. Partial or synthetic
         # sessions remain in the audit trail but are not comparable as
@@ -733,6 +735,7 @@ async def analyze_symbol(
                 signal_timestamp=analysis_res.generated_at_utc,
                 evaluation_horizon_days=30,
                 session_id=session_id,
+                owner_id=owner_id,
             )
     except Exception as exc:
         logger.warning(

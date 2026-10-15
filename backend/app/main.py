@@ -14,16 +14,27 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Importing the model above registers it with SQLAlchemy.
-    Base.metadata.create_all(bind=engine)
+    if settings.environment.strip().lower() == "production":
+        # Production schema is managed only through reviewed Alembic migrations.
+        yield
+        return
+
+    # PostgreSQL schema is migration-managed in every environment. A restricted
+    # runtime role must never need CREATE privileges merely to start the API.
+    if engine.dialect.name != "postgresql":
+        # Importing the model above registers it with SQLAlchemy.
+        Base.metadata.create_all(bind=engine)
+
     try:
-        from app.db.session import SessionLocal
+        from app.db.session import SessionLocal, set_database_context
         from app.services.evaluation import seed_historical_evaluations
         from app.services.investors import seed_default_investor_profiles
         from app.services.rag import seed_demonstration_corpus
 
         db = SessionLocal()
         try:
+            # Startup seeding is a trusted process operation outside production.
+            set_database_context(db, operator=True)
             seed_demonstration_corpus(db)
             seed_default_investor_profiles(db)
             seed_historical_evaluations(db)

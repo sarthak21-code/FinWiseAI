@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     database_url: str = (
         f"sqlite:///{(BACKEND_ROOT / 'vantageai.db').as_posix()}"
     )
+    supabase_url: str = ""
+    supabase_jwt_audience: str = "authenticated"
 
     frontend_origin: str = "http://localhost:3000"
 
@@ -22,6 +24,7 @@ class Settings(BaseSettings):
     openrouter_model: str = ""
     alpha_vantage_api_key: str = ""
     evaluation_update_token: str = ""
+    demo_seed_token: str = ""
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_ROOT / ".env",

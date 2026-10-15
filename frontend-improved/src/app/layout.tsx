@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" data-scroll-behavior="smooth">
       <body className="bg-[#080D16] text-slate-100 min-h-screen">
         <StockDataProvider>
           <ShellLayout>{children}</ShellLayout>

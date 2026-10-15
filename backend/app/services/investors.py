@@ -17,6 +17,7 @@ from app.schemas.investor import (
 def create_investor_profile(
     db: Session,
     profile_data: InvestorProfileCreate,
+    owner_id: str | None = None,
 ) -> InvestorProfile:
     name_clean = profile_data.name.strip()
     if not name_clean:
@@ -28,6 +29,7 @@ def create_investor_profile(
         investment_horizon_months=profile_data.investment_horizon_months,
         max_single_asset_allocation=profile_data.max_single_asset_allocation,
         investment_objective=profile_data.investment_objective.strip() or "Capital Growth",
+        owner_id=owner_id,
     )
 
     db.add(profile)
@@ -36,11 +38,16 @@ def create_investor_profile(
     return profile
 
 
-def list_investor_profiles(db: Session) -> list[InvestorProfile]:
+def list_investor_profiles(
+    db: Session, owner_id: str | None = None
+) -> list[InvestorProfile]:
+    statement = select(InvestorProfile)
+    if owner_id is not None:
+        statement = statement.where(
+            (InvestorProfile.owner_id == owner_id) | (InvestorProfile.is_demo.is_(True))
+        )
     return list(
-        db.query(InvestorProfile)
-        .order_by(InvestorProfile.created_at.desc())
-        .all()
+        db.execute(statement.order_by(InvestorProfile.created_at.desc())).scalars().all()
     )
 
 
@@ -294,6 +301,7 @@ def seed_default_investor_profiles(db: Session) -> list[InvestorProfile]:
             investment_horizon_months=36,
             max_single_asset_allocation=0.15,
             investment_objective="Capital Preservation & Fixed Income",
+            is_demo=True,
         )
         db.add(prof_a)
         db.flush()
@@ -316,6 +324,7 @@ def seed_default_investor_profiles(db: Session) -> list[InvestorProfile]:
             investment_horizon_months=60,
             max_single_asset_allocation=0.35,
             investment_objective="High-Beta Growth & Tech Expansion",
+            is_demo=True,
         )
         db.add(prof_b)
         db.flush()

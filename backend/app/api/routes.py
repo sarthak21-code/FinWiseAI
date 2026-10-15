@@ -4,13 +4,16 @@ from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from sqlalchemy import desc, select, text
+from sqlalchemy import desc, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.session import get_db
+from app.core.auth import get_current_user
+from app.db.session import get_db, set_database_context
 from app.models.document import DocumentChunk, FinancialDocument
 from app.models.session import AnalysisSession
+from app.models.user import UserIdentity
+from app.models.investor import InvestorProfile
 from app.schemas.fundamental import FundamentalMetrics
 from app.schemas.intelligence import (
     AnalyzeRequest,
@@ -68,6 +71,29 @@ from app.services.rag import (
 from app.services.technical_analysis import get_technical_analysis
 
 router = APIRouter(prefix="/api/v1")
+
+
+def _accessible_profile(
+    db: Session,
+    profile_id: str,
+    user: UserIdentity,
+    *,
+    allow_demo: bool,
+) -> InvestorProfile | None:
+    ownership = [InvestorProfile.owner_id == user.id]
+    if allow_demo:
+        ownership.append(InvestorProfile.is_demo.is_(True))
+    return db.execute(
+        select(InvestorProfile).where(
+            InvestorProfile.id == profile_id,
+            or_(*ownership),
+        )
+    ).scalar_one_or_none()
+
+
+@router.get("/users/me")
+def read_current_user(user: UserIdentity = Depends(get_current_user)):
+    return {"id": user.id, "issuer": user.issuer, "subject": user.subject}
 
 
 @router.get("/health")
@@ -150,10 +176,15 @@ async def read_fundamental_analysis(symbol: str):
 async def read_intelligence_analysis(
     symbol: str,
     profile_id: Optional[str] = Query(default=None),
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if profile_id and not _accessible_profile(db, profile_id, user, allow_demo=True):
+        raise HTTPException(status_code=404, detail="Investor profile not found")
     try:
-        return await analyze_symbol(symbol=symbol, profile_id=profile_id, db=db)
+        return await analyze_symbol(
+            symbol=symbol, profile_id=profile_id, db=db, owner_id=user.id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except MarketDataUnavailable as exc:
@@ -163,10 +194,20 @@ async def read_intelligence_analysis(
 @router.post("/intelligence/analyze", response_model=IntelligenceAnalysis)
 async def post_intelligence_analysis(
     payload: AnalyzeRequest,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if payload.profile_id and not _accessible_profile(
+        db, payload.profile_id, user, allow_demo=True
+    ):
+        raise HTTPException(status_code=404, detail="Investor profile not found")
     try:
-        return await analyze_symbol(symbol=payload.symbol, profile_id=payload.profile_id, db=db)
+        return await analyze_symbol(
+            symbol=payload.symbol,
+            profile_id=payload.profile_id,
+            db=db,
+            owner_id=user.id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except MarketDataUnavailable as exc:
@@ -176,24 +217,23 @@ async def post_intelligence_analysis(
 @router.post("/intelligence/compare-profiles", response_model=ProfileComparisonResponse)
 async def compare_profiles(
     payload: CompareProfilesRequest,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Run an identical market observation snapshot against two distinct investor profiles."""
+    prof_a = _accessible_profile(db, payload.profile_a_id, user, allow_demo=True)
+    prof_b = _accessible_profile(db, payload.profile_b_id, user, allow_demo=True)
+    if not prof_a or not prof_b:
+        raise HTTPException(status_code=404, detail="Investor profile not found")
     try:
-        analysis = await analyze_symbol(symbol=payload.symbol, profile_id=None, db=db)
+        analysis = await analyze_symbol(
+            symbol=payload.symbol, profile_id=None, db=db, owner_id=user.id
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Market snapshot retrieval failed; provider details are withheld.",
         ) from exc
-
-    prof_a = get_investor_profile(db, payload.profile_a_id)
-    if not prof_a:
-        raise HTTPException(status_code=404, detail=f"Profile A '{payload.profile_a_id}' not found.")
-
-    prof_b = get_investor_profile(db, payload.profile_b_id)
-    if not prof_b:
-        raise HTTPException(status_code=404, detail=f"Profile B '{payload.profile_b_id}' not found.")
 
     technical_signal = next(
         (
@@ -248,10 +288,13 @@ async def compare_profiles(
 @router.get("/intelligence/sessions")
 def list_analysis_sessions(
     limit: int = Query(default=20, ge=1, le=100),
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     sessions = db.execute(
-        select(AnalysisSession).order_by(desc(AnalysisSession.created_at)).limit(limit)
+        select(AnalysisSession)
+        .where(AnalysisSession.owner_id == user.id)
+        .order_by(desc(AnalysisSession.created_at)).limit(limit)
     ).scalars().all()
 
     return [
@@ -272,9 +315,15 @@ def list_analysis_sessions(
 @router.get("/intelligence/sessions/{session_id}")
 def get_analysis_session_detail(
     session_id: str,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    session = db.get(AnalysisSession, session_id)
+    session = db.execute(
+        select(AnalysisSession).where(
+            AnalysisSession.id == session_id,
+            AnalysisSession.owner_id == user.id,
+        )
+    ).scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -296,9 +345,12 @@ def get_analysis_session_detail(
 
 
 @router.get("/intelligence/evaluation")
-def read_evaluation_metrics(db: Session = Depends(get_db)):
+def read_evaluation_metrics(
+    user: UserIdentity = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Retrieve session latency, 30-day forward return evaluations, and system accuracy benchmarks."""
-    return get_evaluation_metrics(db)
+    return get_evaluation_metrics(db, owner_id=user.id)
 
 
 @router.post("/intelligence/evaluation/update")
@@ -317,6 +369,7 @@ async def update_evaluation_outcomes(
         expected_token, update_token
     ):
         raise HTTPException(status_code=404, detail="Not found")
+    set_database_context(db, operator=True)
     return await update_matured_evaluations(db, limit=limit)
 
 
@@ -390,10 +443,11 @@ def get_document_detail(
 )
 def create_investor(
     payload: InvestorProfileCreate,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     try:
-        return create_investor_profile(db, payload)
+        return create_investor_profile(db, payload, owner_id=user.id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -409,8 +463,11 @@ def create_investor(
     "/profiles",
     response_model=list[InvestorProfileResponse],
 )
-def list_investors(db: Session = Depends(get_db)):
-    return list_investor_profiles(db)
+def list_investors(
+    user: UserIdentity = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return list_investor_profiles(db, owner_id=user.id)
 
 
 @router.get(
@@ -423,9 +480,10 @@ def list_investors(db: Session = Depends(get_db)):
 )
 def get_investor(
     profile_id: str,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    investor = get_investor_profile(db, profile_id)
+    investor = _accessible_profile(db, profile_id, user, allow_demo=True)
     if investor is None:
         raise HTTPException(status_code=404, detail="Investor profile not found")
     return investor
@@ -437,8 +495,11 @@ def get_investor(
 )
 def get_profile_portfolio(
     profile_id: str,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if not _accessible_profile(db, profile_id, user, allow_demo=True):
+        raise HTTPException(status_code=404, detail="Investor profile not found")
     try:
         return calculate_portfolio_risk(db, profile_id)
     except ValueError as exc:
@@ -453,8 +514,11 @@ def get_profile_portfolio(
 def add_holding(
     profile_id: str,
     payload: PortfolioHoldingCreate,
+    user: UserIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if not _accessible_profile(db, profile_id, user, allow_demo=False):
+        raise HTTPException(status_code=404, detail="Investor profile not found")
     try:
         return add_portfolio_holding(db, profile_id, payload)
     except ValueError as exc:
@@ -466,8 +530,18 @@ def add_holding(
 # ==========================================
 
 @router.post("/demo/seed")
-def seed_demo_environment(db: Session = Depends(get_db)):
-    """Seed financial documents, demo profiles, and benchmark evaluations."""
+def seed_demo_environment(
+    seed_token: Optional[str] = Header(default=None, alias="X-Demo-Seed-Token"),
+    db: Session = Depends(get_db),
+):
+    """Seed demo records only when an operator token is configured."""
+    expected_token = settings.demo_seed_token
+    if not expected_token or not seed_token or not secrets.compare_digest(
+        expected_token, seed_token
+    ):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    set_database_context(db, operator=True)
     doc_count = seed_demonstration_corpus(db)
     profs = seed_default_investor_profiles(db)
     eval_count = seed_historical_evaluations(db)

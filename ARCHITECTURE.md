@@ -83,6 +83,6 @@ Existing session JSON fields persist per-agent timing, citations, signals, and r
 
 ## 7. Persistence and migration
 
-FastAPI startup calls SQLAlchemy `Base.metadata.create_all` and idempotent demo seeders. This creates missing tables but does not migrate existing table layouts. No Alembic migration system was found. This remediation adds no database columns; coverage metadata is persisted in the existing reasoning-trace JSON and response fields. Any future structural schema change requires a versioned migration and backup plan.
+FastAPI startup calls SQLAlchemy `Base.metadata.create_all` and idempotent demo seeders outside production. Production startup skips demo seeding, but still calls `create_all`, which creates missing tables and does not migrate existing table layouts. No Alembic migration system was found. Any future structural schema change requires a versioned migration and backup plan.
 
 Analysis currently persists its session as part of an analysis request; a GET analysis route therefore has write side effects. Do not point tests/demo setup at a user's normal database. The current prototype does not implement authentication/authorization on profile and holding mutations; keep it private and use isolated data until access control is designed.

@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import (
     Boolean,
     DateTime,
+    ForeignKey,
     Float,
     Integer,
     String,
@@ -26,6 +27,14 @@ class SignalEvaluation(Base):
         String(36),
         nullable=True,
         index=True,
+    )
+
+    owner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey(
+            "user_identities.id", ondelete="SET NULL",
+            name="fk_signal_evaluations_owner_id",
+        ),
+        nullable=True, index=True,
     )
 
     symbol: Mapped[str] = mapped_column(

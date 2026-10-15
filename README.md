@@ -86,7 +86,7 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Run database table creation and launch FastAPI server
-# Use a dedicated local demo database; startup creates tables and seeds demo data.
+# Use a dedicated local demo database; non-production startup creates tables and seeds demo data.
 $env:DATABASE_URL = "sqlite:///C:/vantageai/backend/vantageai-demo.sqlite3"
 python -m uvicorn app.main:app --reload --port 8000
 ```
@@ -134,19 +134,20 @@ npx tsc --noEmit
 
 The improved frontend can be deployed independently as a Next.js application. In Vercel, set the project Root Directory to `frontend-improved`, install with `npm ci`, and build with `npm run build`. The frontend's `/api/backend` route proxies requests on the server; configure the server-side `BACKEND_URL` to the publicly reachable HTTPS base URL of the separately hosted FastAPI service. If it is omitted, the proxy falls back to `http://127.0.0.1:8000`, which is only suitable for local development. Do not use a static export.
 
-The backend is a separate ASGI service started from `backend` with `uvicorn app.main:app --host 0.0.0.0 --port <provider-port>`. Set `DATABASE_URL` to a writable, persistent SQLite path on the host. The application currently has no migration framework and runs `create_all` plus demo seeding at startup. Its dependencies do not include a PostgreSQL driver; do not point it at an unsupported database URL. A non-persistent serverless filesystem is not suitable for the SQLite database.
+The backend is a separate ASGI service started from `backend` with `uvicorn app.main:app --host 0.0.0.0 --port <provider-port>`. Set `DATABASE_URL` to a writable, persistent SQLite path on the host. Startup currently runs `create_all`, which creates missing tables but does not migrate existing schemas. Demo seeders run only outside `ENVIRONMENT=production`; production demo data must be provisioned intentionally. Its dependencies do not include a PostgreSQL driver; do not point it at an unsupported database URL. A non-persistent serverless filesystem is not suitable for the SQLite database.
 
-Backend settings read these environment variable names: `DATABASE_URL`, `FRONTEND_ORIGIN`, `ENVIRONMENT`, `APP_NAME`, `APP_VERSION`, `ALPHA_VANTAGE_API_KEY`, and `EVALUATION_UPDATE_TOKEN`. Set `FRONTEND_ORIGIN` to the deployed frontend origin when direct browser-to-backend access is used; the normal frontend proxy itself is server-to-server. `ALPHA_VANTAGE_API_KEY` is optional because a Yahoo Finance fallback exists. `EVALUATION_UPDATE_TOKEN` is needed only to enable the protected manual evaluation-update endpoint. `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` are declared settings but currently unused. The frontend requires `BACKEND_URL`; keep provider credentials on the backend and never use a `NEXT_PUBLIC_` prefix for them.
+Backend settings read these environment variable names: `DATABASE_URL`, `FRONTEND_ORIGIN`, `ENVIRONMENT`, `APP_NAME`, `APP_VERSION`, `ALPHA_VANTAGE_API_KEY`, `EVALUATION_UPDATE_TOKEN`, and `DEMO_SEED_TOKEN`. Set `FRONTEND_ORIGIN` to the deployed frontend origin when direct browser-to-backend access is used; the normal frontend proxy itself is server-to-server. `ALPHA_VANTAGE_API_KEY` is optional because a Yahoo Finance fallback exists. `EVALUATION_UPDATE_TOKEN` and `DEMO_SEED_TOKEN` are operator-only tokens for their respective manual operations. `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` are declared settings but currently unused. The frontend requires `BACKEND_URL`; keep provider and operator credentials on the backend and never use a `NEXT_PUBLIC_` prefix for them.
 
-The current API does not provide general user authentication or per-user data isolation, and several profile, analysis, and demo-seed routes are unauthenticated. Do not expose it as a public multi-user financial product until access control, rate limits, and user-data isolation are addressed. The current database and seeded records are prototype/demo data.
+The current API does not provide general user authentication or per-user data isolation; profile, holding, analysis, session, evaluation-read, and document routes remain unauthenticated. Demo seeding and evaluation updating require operator tokens. Do not expose the API as a public multi-user financial product until identity, access control, rate limits, and user-data isolation are addressed. The current database and seeded records are prototype/demo data.
 
 ---
 
 ## 7. Demonstration Seed Setup
 
-The platform automatically primes its demonstration environment on startup. You can also re-trigger seeding at any time via:
+In non-production environments, startup automatically primes the demonstration environment. Production startup skips demo seeding. An operator can re-trigger seeding only when `DEMO_SEED_TOKEN` is configured:
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/demo/seed"
+$headers = @{ "X-Demo-Seed-Token" = $env:DEMO_SEED_TOKEN }
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/demo/seed" -Headers $headers
 ```
 Seeded assets include:
 - **Synthetic Filing-Style Corpus**: Illustrative scenarios for AAPL, MSFT, NVDA, GOOGL, TSLA, plus an explicit synthetic stress test. These are not SEC filings and are labeled synthetic in retrieval results.

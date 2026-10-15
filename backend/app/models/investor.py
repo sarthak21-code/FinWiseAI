@@ -40,6 +40,18 @@ class InvestorProfile(Base):
         default=lambda: str(uuid4()),
     )
 
+    owner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey(
+            "user_identities.id", ondelete="SET NULL",
+            name="fk_investor_profiles_owner_id",
+        ),
+        nullable=True, index=True,
+    )
+
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
     name: Mapped[str] = mapped_column(
         String(80),
         nullable=False,

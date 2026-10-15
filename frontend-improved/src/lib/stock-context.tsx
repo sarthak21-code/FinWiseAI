@@ -17,8 +17,8 @@ import {
   fetchIntelligence,
   fetchMarketQuote,
   fetchProfiles,
+  createInvestorProfile,
   fetchTechnicalAnalysis,
-  seedDemoEnvironment,
 } from "@/lib/api";
 
 type StockContextType = StockBundle & {
@@ -33,28 +33,6 @@ type StockContextType = StockBundle & {
 const StockContext = createContext<StockContextType | undefined>(undefined);
 
 const DEFAULT_SYMBOL = "AAPL";
-const DEFAULT_PROFILE = "demo_profile_conservative";
-const FALLBACK_PROFILES: InvestorProfile[] = [
-  {
-    id: "demo_profile_conservative",
-    name: "Conservative Capital Preservation",
-    risk_tolerance: 1,
-    investment_horizon_months: 36,
-    max_single_asset_allocation: 0.15,
-    investment_objective: "Capital Preservation & Fixed Income",
-    created_at: new Date(0).toISOString(),
-  },
-  {
-    id: "demo_profile_aggressive",
-    name: "Aggressive Growth Investor",
-    risk_tolerance: 5,
-    investment_horizon_months: 60,
-    max_single_asset_allocation: 0.35,
-    investment_objective: "High-Beta Growth & Tech Expansion",
-    created_at: new Date(0).toISOString(),
-  },
-];
-
 function StockDataProviderInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -65,8 +43,9 @@ function StockDataProviderInner({ children }: { children: React.ReactNode }) {
     urlTicker ? urlTicker.toUpperCase().trim() : DEFAULT_SYMBOL,
   );
 
-  const [selectedProfileId, setSelectedProfileId] = useState<string>(DEFAULT_PROFILE);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [profiles, setProfiles] = useState<InvestorProfile[]>([]);
+  const [profilesReady, setProfilesReady] = useState(false);
   const [profileSetupError, setProfileSetupError] = useState<string | null>(null);
 
   const [quote, setQuote] = useState<MarketQuote | null>(null);
@@ -80,28 +59,38 @@ function StockDataProviderInner({ children }: { children: React.ReactNode }) {
 
   // Load profiles on mount
   useEffect(() => {
+    if (pathname === "/login") return;
     async function initProfiles() {
       try {
         let loaded = await fetchProfiles();
         if (!loaded || loaded.length === 0) {
-          const seedResult = await seedDemoEnvironment();
-          loaded = await fetchProfiles();
-          if (!seedResult || loaded.length === 0) {
+          const created = await createInvestorProfile({
+            name: "My Investor Profile",
+            risk_tolerance: 3,
+            investment_horizon_months: 12,
+            max_single_asset_allocation: 0.2,
+            investment_objective: "Capital Growth",
+          });
+          loaded = created ? [created] : [];
+          if (loaded.length === 0) {
             setProfileSetupError(
-              "Demo profile setup did not complete. Portfolio and profile comparison data may be unavailable.",
+              "Your profile could not be initialized. Please refresh after signing in again.",
             );
           }
         }
-        setProfiles(loaded.length > 0 ? loaded : FALLBACK_PROFILES);
+        setProfiles(loaded);
+        setSelectedProfileId(loaded[0]?.id ?? "");
       } catch {
         setProfileSetupError(
-          "Demo profile setup failed. Portfolio and profile comparison data may be unavailable.",
+          "Your profile could not be initialized. Please refresh after signing in again.",
         );
-        setProfiles(FALLBACK_PROFILES);
+        setProfiles([]);
+      } finally {
+        setProfilesReady(true);
       }
     }
     void initProfiles();
-  }, []);
+  }, [pathname]);
 
   const loadStockData = useCallback(async (targetSymbol: string, profileId?: string) => {
     const cleanSym = targetSymbol.trim().toUpperCase();
@@ -153,9 +142,10 @@ function StockDataProviderInner({ children }: { children: React.ReactNode }) {
   }, [selectedProfileId]);
 
   useEffect(() => {
+    if (pathname === "/login" || !profilesReady || !selectedProfileId) return;
     const target = urlTicker ? urlTicker.toUpperCase().trim() : DEFAULT_SYMBOL;
     void Promise.resolve().then(() => loadStockData(target, selectedProfileId));
-  }, [loadStockData, urlTicker, selectedProfileId]);
+  }, [loadStockData, urlTicker, selectedProfileId, profilesReady, pathname]);
 
   const setSelectedSymbol = useCallback(
     (newSymbol: string) => {

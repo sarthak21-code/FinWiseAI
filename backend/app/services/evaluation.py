@@ -41,6 +41,7 @@ def record_analysis_session(
     reasoning_trace: list[dict[str, Any]],
     personalized_interpretation: Optional[dict[str, Any]] = None,
     profile_id: Optional[str] = None,
+    owner_id: Optional[str] = None,
     status: str = "completed",
     session_id: Optional[str] = None,
 ) -> AnalysisSession:
@@ -49,6 +50,7 @@ def record_analysis_session(
         id=session_id or str(uuid4()),
         symbol=symbol.strip().upper(),
         profile_id=profile_id,
+        owner_id=owner_id,
         status=status,
         overall_classification=overall_classification,
         total_latency_ms=round(total_latency_ms, 2),
@@ -78,6 +80,7 @@ def record_signal_evaluation(
     exit_price: Optional[float] = None,
     is_synthetic: bool = False,
     data_source: str = "Historical Price Feed",
+    owner_id: Optional[str] = None,
 ) -> SignalEvaluation:
     """Record a directional signal for subsequent forward-return evaluation."""
     if session_id is not None:
@@ -127,6 +130,7 @@ def record_signal_evaluation(
     eval_record = SignalEvaluation(
         id=record_id,
         session_id=session_id,
+        owner_id=owner_id,
         symbol=symbol.strip().upper(),
         signal_dimension=signal_dimension,
         signal_classification=signal_classification,
@@ -390,10 +394,15 @@ async def update_matured_evaluations(
     return result
 
 
-def get_evaluation_metrics(db: Session) -> dict[str, Any]:
+def get_evaluation_metrics(
+    db: Session, owner_id: Optional[str] = None
+) -> dict[str, Any]:
     """Aggregate real session latencies, signal accuracy, and evaluation coverage."""
+    session_statement = select(AnalysisSession)
+    if owner_id is not None:
+        session_statement = session_statement.where(AnalysisSession.owner_id == owner_id)
     sessions = db.execute(
-        select(AnalysisSession).order_by(desc(AnalysisSession.created_at)).limit(100)
+        session_statement.order_by(desc(AnalysisSession.created_at)).limit(100)
     ).scalars().all()
 
     total_sessions = len(sessions)
@@ -426,8 +435,13 @@ def get_evaluation_metrics(db: Session) -> dict[str, Any]:
         agent_latencies = {}
 
     # Signal evaluations
+    evaluation_statement = select(SignalEvaluation)
+    if owner_id is not None:
+        evaluation_statement = evaluation_statement.where(
+            SignalEvaluation.owner_id == owner_id
+        )
     evals = db.execute(
-        select(SignalEvaluation).order_by(desc(SignalEvaluation.signal_timestamp)).limit(200)
+        evaluation_statement.order_by(desc(SignalEvaluation.signal_timestamp)).limit(200)
     ).scalars().all()
 
     total_evals = len(evals)

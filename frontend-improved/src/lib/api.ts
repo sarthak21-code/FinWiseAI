@@ -144,6 +144,19 @@ export async function fetchProfiles(): Promise<InvestorProfile[]> {
   return response.json().catch(() => []);
 }
 
+export async function createInvestorProfile(
+  profile: Pick<InvestorProfile, "name" | "risk_tolerance" | "investment_horizon_months" | "max_single_asset_allocation" | "investment_objective">,
+): Promise<InvestorProfile | null> {
+  const response = await fetch("/api/backend/api/v1/profiles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!response || !response.ok) return null;
+  return response.json().catch(() => null);
+}
+
 export async function fetchProfilePortfolio(profileId: string): Promise<PortfolioRiskMetrics | null> {
   const encoded = encodeURIComponent(profileId);
   const response = await fetch(`/api/backend/api/v1/profiles/${encoded}/portfolio`, {

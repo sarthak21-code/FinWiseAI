@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useStockData } from "@/lib/stock-context";
 import { Search, RefreshCw, AlertCircle, Database, Clock, User } from "lucide-react";
 import { formatDate, formatTradingDay } from "@/lib/formatting";
+import { signOut } from "@/app/auth/actions";
 
 const POPULAR_TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "TSLA"];
 
@@ -120,6 +121,11 @@ export function TopBar() {
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-emerald-400" : ""}`} />
           <span className="hidden sm:inline">Refresh</span>
         </button>
+        <form action={signOut}>
+          <button className="rounded-lg border border-slate-700 px-2.5 py-1.5 font-medium text-slate-300 hover:bg-slate-800">
+            Sign out
+          </button>
+        </form>
       </div>
 
       {/* Global Error Banner if fatal */}

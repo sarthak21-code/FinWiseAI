@@ -35,6 +35,14 @@ class AnalysisSession(Base):
         index=True,
     )
 
+    owner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey(
+            "user_identities.id", ondelete="SET NULL",
+            name="fk_analysis_sessions_owner_id",
+        ),
+        nullable=True, index=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

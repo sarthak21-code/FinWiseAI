@@ -27,6 +27,8 @@
 *.py[cod]
 **/.pytest_cache/
 **/.pytest_*/
+**/.pytest-*/
+**/.verification-*/
 **/.mypy_cache/
 **/.ruff_cache/
 **/.tox/
@@ -40,6 +42,7 @@
 # Node dependencies and generated frontend output.
 **/node_modules/
 **/.next/
+**/.next-*/
 **/.vercel/
 **/out/
 **/.turbo/

@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.auth import get_current_user
+from app.models.user import UserIdentity
 from app.services.historical_prices import (
     HistoricalBar,
     HistoricalPriceHistory,
@@ -12,8 +14,16 @@ from app.services.historical_prices import (
 
 @pytest.fixture()
 def client():
-    with TestClient(app) as test_client:
-        yield test_client
+    app.dependency_overrides[get_current_user] = lambda: UserIdentity(
+        id="11111111-1111-4111-8111-111111111111",
+        issuer="https://test.supabase.co/auth/v1",
+        subject="legacy-api-test-user",
+    )
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_root(client):

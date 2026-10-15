@@ -10,7 +10,7 @@
    ```powershell
    cd C:\vantageai\backend
    .\.venv\Scripts\Activate.ps1
-   # Use a dedicated demo database; startup creates tables and seeds demo data.
+   # Use a dedicated demo database; non-production startup creates tables and seeds demo data.
    $env:DATABASE_URL = "sqlite:///C:/vantageai/backend/vantageai-demo.sqlite3"
    python -m uvicorn app.main:app --reload --port 8000
    ```

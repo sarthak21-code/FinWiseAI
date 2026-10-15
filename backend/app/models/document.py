@@ -71,7 +71,6 @@ class FinancialDocument(Base):
         String(64),
         nullable=False,
         unique=True,
-        index=True,
     )
 
     synthetic: Mapped[bool] = mapped_column(
